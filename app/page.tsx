@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { supabase } from '../lib/supabase';
+import { useRouter } from 'next/navigation';
 
 // 탭 목록
 const TYPES = [
@@ -20,6 +21,19 @@ const TYPES = [
 const CREATE_TYPES = TYPES; // 매물추가용
 
 export default function Home() {
+  const router = useRouter();
+
+  // ------- 로그인 여부 확인 --------
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const ok = localStorage.getItem('adminAuthed');
+    if (ok !== 'yes') {
+      router.push('/login');
+    }
+  }, [router]);
+  // ---------------------------------
+
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -31,10 +45,7 @@ export default function Home() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>({});
 
-  /** 목록 불러오기
-   *  - 검색어(q)가 있으면 전체 검색
-   *  - 검색어가 없을 때만 type 필터 적용
-   */
+  /** 목록 불러오기 */
   const load = async () => {
     setLoading(true);
 
@@ -171,15 +182,15 @@ export default function Home() {
   };
 
   // ===== 테이블 종류 플래그 =====
-  // 건물매매 / 단독매매 / 토지  → 매매용 테이블 (대지면적, 매매가, 평당가...)
+  // 건물매매 / 단독매매 / 토지
   const isLandSaleType =
     type === '건물매매' || type === '단독매매' || type === '토지';
-  // 빌라매매 → 전용면적 + 대지지분
+  // 빌라매매
   const isVillaSaleType = type === '빌라매매';
-  // 상가/사무실 → 권리금 사용
+  // 상가/사무실
   const isShopOrOffice = type === '상가' || type === '사무실';
 
-  // 토지/건물 평당가 계산 (만원 기준) - land_area_m2 + price_manwon 사용
+  // 토지/건물 평당가 계산 (만원 기준)
   const calcPyeongPrice = (r: any) => {
     if (!r.land_area_m2 || !r.price_manwon) return '-';
 
@@ -190,8 +201,8 @@ export default function Home() {
       return '-';
     }
 
-    const pyeong = land / 3.3058; // 1평 = 3.3058㎡
-    const per = Math.round(price / pyeong); // 평당가(만원)
+    const pyeong = land / 3.3058;
+    const per = Math.round(price / pyeong);
     return per.toLocaleString();
   };
 
@@ -299,7 +310,12 @@ export default function Home() {
       </div>
 
       {/* 엑셀 스타일 표 */}
-      <div style={{ overflowX: 'auto', border: '1px solid #818181ff' }}>
+      <div
+        style={{
+          overflowX: 'auto',
+          border: '1px solid #4b5563', // 바깥 테두리 좀 더 진하게
+        }}
+      >
         {isLandSaleType ? (
           /* ============ 건물매매 / 단독매매 / 토지 공통 매매 테이블 ============ */
           <table
@@ -326,7 +342,7 @@ export default function Home() {
                   <th
                     key={h}
                     style={{
-                      borderBottom: '1px solid #e5e7eb',
+                      border: '1px solid #9b9ea3', // 헤더도 진한 테두리
                       padding: '6px 8px',
                       textAlign: 'center',
                       whiteSpace: 'nowrap',
@@ -380,7 +396,7 @@ export default function Home() {
                       )}
                     </td>
 
-                    {/* 대지면적(㎡) → land_area_m2 */}
+                    {/* 대지면적(㎡) */}
                     <td style={tdStyle(true)}>
                       {isEditing ? (
                         <input
@@ -416,7 +432,7 @@ export default function Home() {
                       )}
                     </td>
 
-                    {/* 평당가(만원) - 계산 */}
+                    {/* 평당가(만원) */}
                     <td style={tdStyle(true)}>{calcPyeongPrice(r)}</td>
 
                     {/* 연락처 */}
@@ -614,7 +630,7 @@ export default function Home() {
                   <th
                     key={h}
                     style={{
-                      borderBottom: '1px solid #e5e7eb',
+                      border: '1px solid #9b9ea3',
                       padding: '6px 8px',
                       textAlign: 'center',
                       whiteSpace: 'nowrap',
@@ -647,10 +663,8 @@ export default function Home() {
                       borderBottom: '1px solid #f3f4f6',
                     }}
                   >
-                    {/* 번호 */}
                     <td style={tdStyle(true)}>{idx + 1}</td>
 
-                    {/* 주소 */}
                     <td style={tdStyle()}>
                       {isEditing ? (
                         <input
@@ -668,7 +682,7 @@ export default function Home() {
                       )}
                     </td>
 
-                    {/* 전용면적(㎡) → gross_area_m2 */}
+                    {/* 전용면적 */}
                     <td style={tdStyle(true)}>
                       {isEditing ? (
                         <input
@@ -686,7 +700,7 @@ export default function Home() {
                       )}
                     </td>
 
-                    {/* 대지지분(㎡) → land_area_m2 */}
+                    {/* 대지지분 */}
                     <td style={tdStyle(true)}>
                       {isEditing ? (
                         <input
@@ -722,7 +736,7 @@ export default function Home() {
                       )}
                     </td>
 
-                    {/* 매매가(만원) */}
+                    {/* 매매가 */}
                     <td style={tdStyle(true)}>
                       {isEditing ? (
                         <input
@@ -943,7 +957,7 @@ export default function Home() {
             </tbody>
           </table>
         ) : (
-          /* ========== 원룸 / 투룸 / 쓰리룸 / 상가 / 사무실 테이블 (전용면적, 권리금) ========== */
+          /* ========== 원룸 / 투룸 / 쓰리룸 / 상가 / 사무실 테이블 ========== */
           <table
             style={{
               width: '100%',
@@ -972,7 +986,7 @@ export default function Home() {
                   <th
                     key={h}
                     style={{
-                      borderBottom: '1px solid #e5e7eb',
+                      border: '1px solid #9b9ea3',
                       padding: '6px 8px',
                       textAlign: 'center',
                       whiteSpace: 'nowrap',
@@ -997,7 +1011,6 @@ export default function Home() {
                   fontSize: 12,
                 };
 
-                // 상가/사무실 여부 (혹시 검색으로 섞여 들어올 때 대비해서 row.type 기준)
                 const rowIsBiz = r.type === '상가' || r.type === '사무실';
 
                 return (
@@ -1008,10 +1021,8 @@ export default function Home() {
                       borderBottom: '1px solid #f3f4f6',
                     }}
                   >
-                    {/* 번호 */}
                     <td style={tdStyle(true)}>{idx + 1}</td>
 
-                    {/* 주소 */}
                     <td style={tdStyle()}>
                       {isEditing ? (
                         <input
@@ -1029,7 +1040,7 @@ export default function Home() {
                       )}
                     </td>
 
-                    {/* 전용면적(㎡) → gross_area_m2 */}
+                    {/* 전용면적 */}
                     <td style={tdStyle(true)}>
                       {isEditing ? (
                         <input
@@ -1065,7 +1076,7 @@ export default function Home() {
                       )}
                     </td>
 
-                    {/* 가격(만원) */}
+                    {/* 가격 */}
                     <td style={tdStyle(true)}>
                       {isEditing ? (
                         <input
@@ -1348,10 +1359,11 @@ export default function Home() {
   );
 }
 
+// ✅ 셀 공통 스타일 – 여기만 보면 돼
 function tdStyle(center = false): CSSProperties {
   return {
     padding: '6px 8px',
-    borderRight: '1px solid #f3f4f6',
+    border: '1px solid #9b9ea3', // 모든 셀 테두리 진하게
     textAlign: center ? 'center' : 'left',
     whiteSpace: 'nowrap',
   };
@@ -1385,7 +1397,6 @@ function AddDialog({
   });
   const [saving, setSaving] = useState(false);
 
-  // 타입에 따른 플래그
   const isLandSaleType =
     form.type === '건물매매' || form.type === '단독매매' || form.type === '토지';
   const isVillaSaleType = form.type === '빌라매매';
@@ -1413,7 +1424,7 @@ function AddDialog({
       price_manwon: form.price_manwon || null,
       land_area_m2: num(form.land_area_m2),
       gross_area_m2: num(form.gross_area_m2),
-      floor: isLandOnly ? null : form.floor || null, // 토지는 층수 없음
+      floor: isLandOnly ? null : form.floor || null,
       maintenance: isLandSaleType ? null : form.maintenance || null,
       options: isLandSaleType ? null : form.options || null,
       premium: isBizLease ? form.premium || null : null,
@@ -1522,10 +1533,9 @@ function AddDialog({
             }
           />
 
-          {/* 면적 관련 */}
+          {/* 면적 */}
           {isLandSaleType ? (
             <>
-              {/* 건물/단독/토지 공통: 대지면적, 토지 아닌 경우 연면적 */}
               <label>대지면적(㎡)</label>
               <input
                 value={form.land_area_m2}
@@ -1566,7 +1576,6 @@ function AddDialog({
             </>
           ) : (
             <>
-              {/* 원룸/투룸/쓰리룸/상가/사무실: 전용면적 한 개 (gross_area_m2) */}
               <label>전용면적(㎡)</label>
               <input
                 value={form.gross_area_m2}
@@ -1577,7 +1586,7 @@ function AddDialog({
             </>
           )}
 
-          {/* 층수 - 토지는 없음 */}
+          {/* 층수 */}
           {!isLandOnly && (
             <>
               <label>층수</label>
@@ -1590,7 +1599,7 @@ function AddDialog({
             </>
           )}
 
-          {/* 관리비 - 매매(건물/단독/토지)는 안 쓰기 */}
+          {/* 관리비 */}
           {!isLandSaleType && (
             <>
               <label>관리비(만원)</label>
@@ -1626,7 +1635,7 @@ function AddDialog({
             </>
           )}
 
-          {/* 건축물 용도 - 매매(건물/단독/토지)는 제거 */}
+          {/* 건축물 용도 */}
           {!isLandSaleType && (
             <>
               <label>건축물 용도</label>
@@ -1657,7 +1666,6 @@ function AddDialog({
             style={ip}
           />
 
-          {/* 토지도 계약일 있으니까 그대로 두고, 만료일은 임대쪽에만 사실 의미 있지만 일단 공통으로 둠 */}
           <label>만료일</label>
           <input
             type="date"
