@@ -320,9 +320,13 @@ useEffect(() => {
           placeholder="주소 / 비고 / 연락처 검색 (전체 검색)"
           style={searchInput}
         />
-        <button style={btn} onClick={load}>
-          검색
-        </button>
+        <button
+  style={btn}
+  onClick={() => load()}   // <- 이렇게 감싸 주기
+>
+  검색
+</button>
+
         <button style={btn} onClick={resetFilters}>
           초기화
         </button>
