@@ -50,50 +50,45 @@ export default function Home() {
   const [editForm, setEditForm] = useState<any>({});
 
   /** 목록 불러오기 */
-  const load = async () => {
-    setLoading(true);
+ // 기존: const load = async () => {
+const load = async (overrideType?: string, overrideKeyword?: string) => {
+  setLoading(true);
 
-    let query = supabase
-      .from('listings')
-      .select('*')
-      .order('created_at', { ascending: false });
+  // ⭐ 인자로 들어온 값이 있으면 그걸 우선 사용
+  const t = overrideType ?? type;
+  const keyword = (overrideKeyword ?? q).trim();
 
-    const keyword = q.trim();
+  let query = supabase
+    .from('listings')
+    .select('*')
+    .order('created_at', { ascending: false });
 
-    if (keyword) {
-      // 🔍 전체 검색 모드
-      setIsSearchMode(true);
-      query = query.or(
-        `address.ilike.%${keyword}%,note.ilike.%${keyword}%,contact.ilike.%${keyword}%`
-      );
-    } else {
-      // 탭별 보기 모드
-      setIsSearchMode(false);
-      if (type) {
-        query = query.eq('type', type);
-      }
-    }
+  if (keyword) {
+    query = query.or(
+      `address.ilike.%${keyword}%,note.ilike.%${keyword}%,contact.ilike.%${keyword}%`
+    );
+  } else if (t) {
+    query = query.eq('type', t);
+  }
 
-    const { data, error } = await query;
+  const { data, error } = await query;
 
-    if (error) {
-      console.error(error);
-      alert('데이터 불러오기 실패: ' + error.message);
-      setRows([]);
-    } else {
-      setRows(data || []);
-    }
+  if (error) {
+    console.error(error);
+    alert('데이터 불러오기 실패: ' + error.message);
+    setRows([]);
+  } else {
+    setRows(data || []);
+  }
 
-    setLoading(false);
-  };
+  setLoading(false);
+};
 
-  useEffect(() => {
-    // 탭 바뀔 때마다 로딩
-    if (!isSearchMode) {
-      load();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
+useEffect(() => {
+  load();   // 첫 진입 시 한 번만
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
 
   /** 상태 변경(진행중/계약완료) */
   const onChangeStatus = async (id: string, newStatus: string) => {
@@ -277,27 +272,41 @@ export default function Home() {
       {/* 유형 탭 */}
       <div style={tabBar}>
         {TYPES.map(t => (
-          <button
-            key={t}
-            style={tabBtn(t === type)}
-            onClick={() => {
-              setType(t);
-              setQ('');
-              setIsSearchMode(false);
-              load();
-            }}
-          >
-            {t === '건물매매'
-              ? '건물 매매'
-              : t === '단독매매'
-              ? '단독 매매'
-              : t === '빌라매매'
-              ? '빌라 매매'
-              : t === '토지'
-              ? '토지 매매'
-              : t}
-          </button>
-        ))}
+  <button
+    key={t}
+    style={tabBtn(t === type)}
+    onClick={() => {
+      const newType = t;
+
+      // 1) 탭 상태 바꿔주고
+      setType(newType);
+
+      // 2) 검색어 초기화
+      setQ('');
+
+      // 3) 수정 모드도 초기화
+      setEditingId(null);
+      setEditForm({});
+
+      // 4) 이전 rows를 바로 비워줘서 "예전 테이블"이 눈에 안 보이게
+      setRows([]);
+
+      // 5) 새 타입 기준으로 바로 로딩
+      load(newType, '');
+    }}
+  >
+    {t === '건물매매'
+      ? '건물 매매'
+      : t === '단독매매'
+      ? '단독 매매'
+      : t === '빌라매매'
+      ? '빌라 매매'
+      : t === '토지'
+      ? '토지 매매'
+      : t}
+  </button>
+))}
+
       </div>
 
       {/* 검색 + 매물추가 */}
