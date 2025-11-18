@@ -10,6 +10,7 @@ const TYPES = [
   '원룸',
   '투룸',
   '쓰리룸',
+  '아파트',   // ✅ 아파트 추가
   '상가',
   '사무실',
   '건물매매',
@@ -182,13 +183,11 @@ export default function Home() {
   };
 
   // ===== 테이블 종류 플래그 =====
-  // 건물매매 / 단독매매 / 토지
   const isLandSaleType =
     type === '건물매매' || type === '단독매매' || type === '토지';
-  // 빌라매매
   const isVillaSaleType = type === '빌라매매';
-  // 상가/사무실
   const isShopOrOffice = type === '상가' || type === '사무실';
+  const isApartment = type === '아파트'; // ✅ 아파트 여부
 
   // 토지/건물 평당가 계산 (만원 기준)
   const calcPyeongPrice = (r: any) => {
@@ -313,7 +312,7 @@ export default function Home() {
       <div
         style={{
           overflowX: 'auto',
-          border: '1px solid #4b5563', // 바깥 테두리 좀 더 진하게
+          border: '1px solid #4b5563',
         }}
       >
         {isLandSaleType ? (
@@ -342,7 +341,7 @@ export default function Home() {
                   <th
                     key={h}
                     style={{
-                      border: '1px solid #9b9ea3', // 헤더도 진한 테두리
+                      border: '1px solid #9b9ea3',
                       padding: '6px 8px',
                       textAlign: 'center',
                       whiteSpace: 'nowrap',
@@ -957,7 +956,7 @@ export default function Home() {
             </tbody>
           </table>
         ) : (
-          /* ========== 원룸 / 투룸 / 쓰리룸 / 상가 / 사무실 테이블 ========== */
+          /* ========== 원룸 / 투룸 / 쓰리룸 / 상가 / 사무실 / 아파트 테이블 ========== */
           <table
             style={{
               width: '100%',
@@ -967,22 +966,40 @@ export default function Home() {
           >
             <thead style={{ background: '#f3f4f6' }}>
               <tr>
-                {[
-                  '번호',
-                  '주소',
-                  '전용면적(㎡)',
-                  '층수',
-                  '가격(만원)',
-                  '관리비',
-                  isShopOrOffice ? '권리금(만원)' : '옵션',
-                  '건축물 용도',
-                  '연락처',
-                  '비고',
-                  '계약일',
-                  '만료일',
-                  '상태',
-                  '작업',
-                ].map(h => (
+                {(
+                  isApartment
+                    ? [
+                        '번호',
+                        '주소',
+                        '전용면적(㎡)',
+                        '층수',
+                        '가격(만원)',
+                        '관리비',
+                        '옵션',
+                        '연락처',
+                        '비고',
+                        '계약일',
+                        '만료일',
+                        '상태',
+                        '작업',
+                      ]
+                    : [
+                        '번호',
+                        '주소',
+                        '전용면적(㎡)',
+                        '층수',
+                        '가격(만원)',
+                        '관리비',
+                        isShopOrOffice ? '권리금(만원)' : '옵션',
+                        '건축물 용도',
+                        '연락처',
+                        '비고',
+                        '계약일',
+                        '만료일',
+                        '상태',
+                        '작업',
+                      ]
+                ).map(h => (
                   <th
                     key={h}
                     style={{
@@ -1012,6 +1029,7 @@ export default function Home() {
                 };
 
                 const rowIsBiz = r.type === '상가' || r.type === '사무실';
+                const rowIsApartment = r.type === '아파트';
 
                 return (
                   <tr
@@ -1021,8 +1039,10 @@ export default function Home() {
                       borderBottom: '1px solid #f3f4f6',
                     }}
                   >
+                    {/* 번호 */}
                     <td style={tdStyle(true)}>{idx + 1}</td>
 
+                    {/* 주소 */}
                     <td style={tdStyle()}>
                       {isEditing ? (
                         <input
@@ -1076,7 +1096,7 @@ export default function Home() {
                       )}
                     </td>
 
-                    {/* 가격 */}
+                    {/* 가격(만원) */}
                     <td style={tdStyle(true)}>
                       {isEditing ? (
                         <input
@@ -1138,23 +1158,25 @@ export default function Home() {
                       )}
                     </td>
 
-                    {/* 건축물 용도 */}
-                    <td style={tdStyle()}>
-                      {isEditing ? (
-                        <input
-                          style={cellInput}
-                          value={editForm.bldg_use ?? ''}
-                          onChange={e =>
-                            setEditForm((f: any) => ({
-                              ...f,
-                              bldg_use: e.target.value,
-                            }))
-                          }
-                        />
-                      ) : (
-                        r.bldg_use ?? '-'
-                      )}
-                    </td>
+                    {/* 건축물 용도 - 아파트는 없음 */}
+                    {!rowIsApartment && (
+                      <td style={tdStyle()}>
+                        {isEditing ? (
+                          <input
+                            style={cellInput}
+                            value={editForm.bldg_use ?? ''}
+                            onChange={e =>
+                              setEditForm((f: any) => ({
+                                ...f,
+                                bldg_use: e.target.value,
+                              }))
+                            }
+                          />
+                        ) : (
+                          r.bldg_use ?? '-'
+                        )}
+                      </td>
+                    )}
 
                     {/* 연락처 */}
                     <td style={tdStyle(true)}>
@@ -1328,7 +1350,7 @@ export default function Home() {
               {!loading && rows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={isApartment ? 13 : 14}
                     style={{
                       padding: '12px 8px',
                       textAlign: 'center',
@@ -1359,11 +1381,11 @@ export default function Home() {
   );
 }
 
-// ✅ 셀 공통 스타일 – 여기만 보면 돼
+// ✅ 셀 공통 스타일
 function tdStyle(center = false): CSSProperties {
   return {
     padding: '6px 8px',
-    border: '1px solid #9b9ea3', // 모든 셀 테두리 진하게
+    border: '1px solid #9b9ea3',
     textAlign: center ? 'center' : 'left',
     whiteSpace: 'nowrap',
   };
@@ -1402,6 +1424,7 @@ function AddDialog({
   const isVillaSaleType = form.type === '빌라매매';
   const isBizLease = form.type === '상가' || form.type === '사무실';
   const isLandOnly = form.type === '토지';
+  const isApartment = form.type === '아파트'; // ✅ 아파트 여부
 
   const set = (k: string, v: string) =>
     setForm(prev => ({ ...prev, [k]: v }));
@@ -1428,7 +1451,8 @@ function AddDialog({
       maintenance: isLandSaleType ? null : form.maintenance || null,
       options: isLandSaleType ? null : form.options || null,
       premium: isBizLease ? form.premium || null : null,
-      bldg_use: isLandSaleType ? null : form.bldg_use || null,
+      // ✅ 아파트도 bldg_use 저장 안 함
+      bldg_use: isLandSaleType || isApartment ? null : form.bldg_use || null,
       contact: form.contact || null,
       note: form.note || null,
       contract_date: form.contract_date || null,
@@ -1635,8 +1659,8 @@ function AddDialog({
             </>
           )}
 
-          {/* 건축물 용도 */}
-          {!isLandSaleType && (
+          {/* 건축물 용도 – 아파트/토지는 숨김 */}
+          {!isLandSaleType && !isApartment && (
             <>
               <label>건축물 용도</label>
               <input
