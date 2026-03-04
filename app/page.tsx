@@ -121,8 +121,6 @@ export default function Page() {
     setQ('');
     setEditing(null);
     setOpen(false);
-    // 탭 useEffect가 load 하니까 여기서 한 번만
-    // (type 바꾸는 순간 load 됨)
   };
 
   const onDelete = async (r: ListingRow) => {
@@ -197,7 +195,7 @@ export default function Page() {
                 'rounded-lg border px-3 py-2 text-sm',
                 t === type
                   ? 'border-blue-600 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
+                  : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50'
               )}
             >
               {LABEL(t)}
@@ -241,12 +239,12 @@ export default function Page() {
             : `총 ${rows.length}건`}
         </div>
 
-        {/* 테이블 */}
-        <div className="overflow-auto rounded-xl border border-gray-200 bg-white">
+        {/* ✅ 테이블 (선 진하게 / 계약완료 진하게) */}
+        <div className="overflow-auto rounded-xl border border-gray-300 bg-white">
           <table className="min-w-[1100px] w-full text-sm">
             <thead className="sticky top-0 z-10 bg-gray-50">
               {tableMode === 'search' ? (
-                <tr className="border-b border-gray-200">
+                <tr className="border-b border-gray-300">
                   {[
                     '번호',
                     '유형',
@@ -260,14 +258,14 @@ export default function Page() {
                   ].map(h => (
                     <th
                       key={h}
-                      className="whitespace-nowrap border-r border-gray-200 px-3 py-2 text-left font-semibold text-gray-700 last:border-r-0"
+                      className="whitespace-nowrap border-r border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 last:border-r-0"
                     >
                       {h}
                     </th>
                   ))}
                 </tr>
               ) : tableMode === 'land' ? (
-                <tr className="border-b border-gray-200">
+                <tr className="border-b border-gray-300">
                   {[
                     '번호',
                     '주소',
@@ -283,14 +281,14 @@ export default function Page() {
                   ].map(h => (
                     <th
                       key={h}
-                      className="whitespace-nowrap border-r border-gray-200 px-3 py-2 text-left font-semibold text-gray-700 last:border-r-0"
+                      className="whitespace-nowrap border-r border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 last:border-r-0"
                     >
                       {h}
                     </th>
                   ))}
                 </tr>
               ) : tableMode === 'villa' ? (
-                <tr className="border-b border-gray-200">
+                <tr className="border-b border-gray-300">
                   {[
                     '번호',
                     '주소',
@@ -308,14 +306,14 @@ export default function Page() {
                   ].map(h => (
                     <th
                       key={h}
-                      className="whitespace-nowrap border-r border-gray-200 px-3 py-2 text-left font-semibold text-gray-700 last:border-r-0"
+                      className="whitespace-nowrap border-r border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 last:border-r-0"
                     >
                       {h}
                     </th>
                   ))}
                 </tr>
               ) : (
-                <tr className="border-b border-gray-200">
+                <tr className="border-b border-gray-300">
                   {[
                     '번호',
                     '주소',
@@ -334,7 +332,7 @@ export default function Page() {
                   ].map(h => (
                     <th
                       key={h}
-                      className="whitespace-nowrap border-r border-gray-200 px-3 py-2 text-left font-semibold text-gray-700 last:border-r-0"
+                      className="whitespace-nowrap border-r border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 last:border-r-0"
                     >
                       {h}
                     </th>
@@ -363,12 +361,13 @@ export default function Page() {
                     <tr
                       key={r.id}
                       className={cx(
-                        'border-b border-gray-100',
-                        done ? 'bg-red-50/40' : 'bg-white',
+                        // ✅ 가로줄 진하게
+                        'border-b border-gray-300',
+                        // ✅ 계약완료 확실히
+                        done ? 'bg-red-100 text-red-900' : 'bg-white',
                         'hover:bg-gray-50'
                       )}
                     >
-                      {/* 공통 셀 스타일: 줄선 확실히 */}
                       <Td>{idx + 1}</Td>
 
                       {tableMode === 'search' ? (
@@ -513,6 +512,7 @@ export default function Page() {
   );
 }
 
+/** ✅ 셀(세로줄) 진하게 + 행높이 살짝 낮춤 */
 function Td({
   children,
   className,
@@ -523,7 +523,7 @@ function Td({
   return (
     <td
       className={cx(
-        'whitespace-nowrap border-r border-gray-100 px-3 py-2 text-gray-800 last:border-r-0',
+        'whitespace-nowrap border-r border-gray-300 px-3 py-1.5 text-gray-900 last:border-r-0',
         className
       )}
     >
@@ -532,6 +532,7 @@ function Td({
   );
 }
 
+/** ✅ 상태 표시도 더 진하게 */
 function StatusSelect({
   value,
   onChange,
@@ -545,8 +546,10 @@ function StatusSelect({
       value={value}
       onChange={e => onChange(e.target.value)}
       className={cx(
-        'rounded-md border px-2 py-1 text-sm',
-        done ? 'border-red-300 text-red-700' : 'border-gray-300 text-gray-800'
+        'rounded-md border px-2 py-1 text-sm font-medium',
+        done
+          ? 'border-red-500 bg-red-50 text-red-800'
+          : 'border-gray-300 bg-white text-gray-800'
       )}
     >
       <option value="진행중">진행중</option>
@@ -609,7 +612,6 @@ function ListingModal({
   });
 
   useEffect(() => {
-    // 편집 열었을 때 값 갱신
     setForm({
       type: editing?.type || currentType || '',
       address: editing?.address || '',
@@ -695,7 +697,6 @@ function ListingModal({
           </button>
         </div>
 
-        {/* ✅ 여기만 스크롤 */}
         <div className="flex-1 overflow-auto p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="유형">
@@ -873,7 +874,6 @@ function ListingModal({
           </div>
         </div>
 
-        {/* 하단 고정 버튼 */}
         <div className="flex justify-end gap-2 border-t bg-white p-4">
           <button
             onClick={onClose}
