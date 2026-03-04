@@ -170,7 +170,7 @@ export default function Page() {
           <div>
             <h1 className="text-2xl font-bold">매물 관리</h1>
             <p className="text-sm text-gray-500">
-              탭/검색으로 빠르게 필터하고 표에서 바로 관리
+              중앙공인중개사사무소 전용 사이트 입니다!
             </p>
           </div>
 
