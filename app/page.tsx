@@ -866,7 +866,7 @@ function statusSelectStyle(status?: string): CSSProperties {
   };
 }
 
-/** 매물 추가 다이얼로그 (✅ 모바일 완벽 대응 버전) */
+/** 매물 추가 다이얼로그 (✅ 기존 디자인 유지 + 모바일 안잘림) */
 function AddDialog({
   onClose,
   onSaved,
@@ -903,7 +903,8 @@ function AddDialog({
 
   const hideBldgUse = isLandSaleType || isAptType;
 
-  const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
+  const set = (k: string, v: string) =>
+    setForm(prev => ({ ...prev, [k]: v }));
 
   const save = async () => {
     if (!form.type) return alert('유형은 필수입니다.');
@@ -940,7 +941,7 @@ function AddDialog({
     onSaved();
   };
 
-  // ✅ 모바일에서도 절대 안 잘리게 (중요)
+  // ✅ 기존 느낌 유지하면서 모바일에서 안 잘리게만 수정
   const wrap: CSSProperties = {
     position: 'fixed',
     inset: 0,
@@ -949,45 +950,45 @@ function AddDialog({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 50,
-    padding: 12,
+    padding: 12, // ✅ 모바일 여백
   };
 
   const card: CSSProperties = {
-    width: 720,
-    maxWidth: '100%',
+    width: 680,
+    maxWidth: '95vw',
     background: '#fff',
-    borderRadius: 14,
-    boxShadow: '0 12px 40px rgba(0,0,0,.18)',
-    maxHeight: '88vh',         // ✅ 화면 밖으로 안 나감
-    overflow: 'hidden',        // ✅ 내부 스크롤은 body에서
+    borderRadius: 12,
+    boxShadow: '0 10px 30px rgba(0,0,0,.15)',
+    maxHeight: '88vh',  // ✅ 화면 밖으로 안 나감
+    overflow: 'hidden', // ✅ 내부에서 스크롤
     display: 'flex',
     flexDirection: 'column',
   };
 
   const head: CSSProperties = {
-    padding: 14,
-    borderBottom: '1px solid #eef2f7',
+    padding: 16,
+    borderBottom: '1px solid #eee',
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
   };
 
   const body: CSSProperties = {
-    padding: 14,
-    overflow: 'auto',          // ✅ 여기서 스크롤
+    padding: 16,
+    overflow: 'auto', // ✅ 여기가 스크롤
     WebkitOverflowScrolling: 'touch',
   };
 
   const foot: CSSProperties = {
     padding: 12,
-    borderTop: '1px solid #eef2f7',
+    borderTop: '1px solid #eee',
     display: 'flex',
     justifyContent: 'flex-end',
     gap: 8,
-    position: 'sticky',        // ✅ 하단 고정 느낌
-    bottom: 0,
     background: '#fff',
+    position: 'sticky',
+    bottom: 0,
   };
 
   const grid: CSSProperties = {
@@ -999,20 +1000,17 @@ function AddDialog({
 
   const ip: CSSProperties = {
     padding: '8px 10px',
-    border: '1px solid #d1d5db',
-    borderRadius: 10,
+    border: '1px solid #ddd',
+    borderRadius: 8,
     width: '100%',
-    outline: 'none',
-    fontSize: 13,
   };
 
-  const footBtn: CSSProperties = {
+  const btn: CSSProperties = {
     padding: '10px 12px',
-    border: '1px solid #d1d5db',
-    borderRadius: 10,
+    border: '1px solid #ddd',
+    borderRadius: 8,
     background: '#fff',
     cursor: 'pointer',
-    fontSize: 13,
     whiteSpace: 'nowrap',
   };
 
@@ -1020,16 +1018,19 @@ function AddDialog({
     <div style={wrap}>
       <div style={card}>
         <div style={head}>
-          <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>매물 추가</h2>
-          <button onClick={onClose} style={{ ...footBtn, padding: '6px 10px' }}>
-            닫기
-          </button>
+          <h2 style={{ fontSize: 18, margin: 0 }}>매물 추가</h2>
+          <button style={btn} onClick={onClose}>닫기</button>
         </div>
 
         <div style={body}>
           <div style={grid} className="add-grid">
+            {/* 유형 */}
             <label>유형</label>
-            <select value={form.type} onChange={e => set('type', e.target.value)} style={ip}>
+            <select
+              value={form.type}
+              onChange={e => set('type', e.target.value)}
+              style={ip}
+            >
               <option value="">선택</option>
               {CREATE_TYPES.map(t => (
                 <option key={t} value={t}>
@@ -1046,35 +1047,78 @@ function AddDialog({
               ))}
             </select>
 
+            {/* 주소 */}
             <label>주소</label>
-            <input value={form.address} onChange={e => set('address', e.target.value)} style={ip} placeholder="예: 서울 광진구 자양동 123-4" />
+            <input
+              value={form.address}
+              onChange={e => set('address', e.target.value)}
+              style={ip}
+              placeholder="예: 서울 광진구 자양동 123-4"
+            />
 
-            <label>{isLandSaleType || isVillaSaleType ? '매매가(만원)' : '가격(만원)'}</label>
-            <input value={form.price_manwon} onChange={e => set('price_manwon', e.target.value)} style={ip} placeholder={isLandSaleType || isVillaSaleType ? '예: 30000' : '예: 5000/120'} />
+            {/* 가격 */}
+            <label>
+              {isLandSaleType || isVillaSaleType ? '매매가(만원)' : '가격(만원)'}
+            </label>
+            <input
+              value={form.price_manwon}
+              onChange={e => set('price_manwon', e.target.value)}
+              style={ip}
+              placeholder={
+                isLandSaleType || isVillaSaleType ? '예: 30000' : '예: 5000/120'
+              }
+            />
 
             {/* 면적 */}
             {isLandSaleType ? (
               <>
                 <label>대지면적(㎡)</label>
-                <input value={form.land_area_m2} onChange={e => set('land_area_m2', e.target.value)} style={ip} inputMode="numeric" />
+                <input
+                  value={form.land_area_m2}
+                  onChange={e => set('land_area_m2', e.target.value)}
+                  style={ip}
+                  inputMode="numeric"
+                />
+
                 {!isLandOnly && (
                   <>
                     <label>연면적(㎡)</label>
-                    <input value={form.gross_area_m2} onChange={e => set('gross_area_m2', e.target.value)} style={ip} inputMode="numeric" />
+                    <input
+                      value={form.gross_area_m2}
+                      onChange={e => set('gross_area_m2', e.target.value)}
+                      style={ip}
+                      inputMode="numeric"
+                    />
                   </>
                 )}
               </>
             ) : isVillaSaleType ? (
               <>
                 <label>전용면적(㎡)</label>
-                <input value={form.gross_area_m2} onChange={e => set('gross_area_m2', e.target.value)} style={ip} inputMode="numeric" />
+                <input
+                  value={form.gross_area_m2}
+                  onChange={e => set('gross_area_m2', e.target.value)}
+                  style={ip}
+                  inputMode="numeric"
+                />
+
                 <label>대지지분(㎡)</label>
-                <input value={form.land_area_m2} onChange={e => set('land_area_m2', e.target.value)} style={ip} inputMode="numeric" />
+                <input
+                  value={form.land_area_m2}
+                  onChange={e => set('land_area_m2', e.target.value)}
+                  style={ip}
+                  inputMode="numeric"
+                />
               </>
             ) : (
               <>
                 <label>전용면적(㎡)</label>
-                <input value={form.gross_area_m2} onChange={e => set('gross_area_m2', e.target.value)} style={ip} inputMode="numeric" />
+                <input
+                  value={form.gross_area_m2}
+                  onChange={e => set('gross_area_m2', e.target.value)}
+                  style={ip}
+                  inputMode="numeric"
+                />
               </>
             )}
 
@@ -1082,28 +1126,48 @@ function AddDialog({
             {!isLandOnly && (
               <>
                 <label>층수</label>
-                <input value={form.floor} onChange={e => set('floor', e.target.value)} style={ip} placeholder="예: 3층 / 반지하 등" />
+                <input
+                  value={form.floor}
+                  onChange={e => set('floor', e.target.value)}
+                  style={ip}
+                  placeholder="예: 3층 / 반지하 등"
+                />
               </>
             )}
 
             {/* 관리비 */}
             {!isLandSaleType && (
               <>
-                <label>관리비</label>
-                <input value={form.maintenance} onChange={e => set('maintenance', e.target.value)} style={ip} placeholder="예: 5만원 / 없음" />
+                <label>관리비(만원)</label>
+                <input
+                  value={form.maintenance}
+                  onChange={e => set('maintenance', e.target.value)}
+                  style={ip}
+                  placeholder="예: 5만원 / 없음"
+                />
               </>
             )}
 
-            {/* 옵션/권리금 */}
+            {/* 옵션 / 권리금 */}
             {isLandSaleType ? null : isBizLease ? (
               <>
                 <label>권리금(만원)</label>
-                <input value={form.premium} onChange={e => set('premium', e.target.value)} style={ip} placeholder="예: 3000 / 없음" />
+                <input
+                  value={form.premium}
+                  onChange={e => set('premium', e.target.value)}
+                  style={ip}
+                  placeholder="예: 3000 / 없음"
+                />
               </>
             ) : (
               <>
                 <label>옵션</label>
-                <input value={form.options} onChange={e => set('options', e.target.value)} style={ip} placeholder="예: 풀옵션, 세탁기, TV" />
+                <input
+                  value={form.options}
+                  onChange={e => set('options', e.target.value)}
+                  style={ip}
+                  placeholder="예: 풀옵션, 세탁기, TV"
+                />
               </>
             )}
 
@@ -1111,37 +1175,70 @@ function AddDialog({
             {!hideBldgUse && (
               <>
                 <label>건축물 용도</label>
-                <input value={form.bldg_use} onChange={e => set('bldg_use', e.target.value)} style={ip} placeholder="예: 다세대주택, 근린생활시설" />
+                <input
+                  value={form.bldg_use}
+                  onChange={e => set('bldg_use', e.target.value)}
+                  style={ip}
+                  placeholder="예: 다세대주택, 근린생활시설"
+                />
               </>
             )}
 
+            {/* 연락처 */}
             <label>연락처</label>
-            <input value={form.contact} onChange={e => set('contact', e.target.value)} style={ip} placeholder="010-0000-0000" />
+            <input
+              value={form.contact}
+              onChange={e => set('contact', e.target.value)}
+              style={ip}
+              placeholder="010-0000-0000"
+            />
 
+            {/* 계약일 / 만료일 */}
             <label>계약일</label>
-            <input type="date" value={form.contract_date} onChange={e => set('contract_date', e.target.value)} style={ip} />
+            <input
+              type="date"
+              value={form.contract_date}
+              onChange={e => set('contract_date', e.target.value)}
+              style={ip}
+            />
 
             <label>만료일</label>
-            <input type="date" value={form.expiry_date} onChange={e => set('expiry_date', e.target.value)} style={ip} />
+            <input
+              type="date"
+              value={form.expiry_date}
+              onChange={e => set('expiry_date', e.target.value)}
+              style={ip}
+            />
 
+            {/* 비고 */}
             <label>비고</label>
-            <input value={form.note} onChange={e => set('note', e.target.value)} style={ip} placeholder="옵션/특이사항 등" />
+            <input
+              value={form.note}
+              onChange={e => set('note', e.target.value)}
+              style={ip}
+              placeholder="옵션/특이사항 등"
+            />
           </div>
         </div>
 
         <div style={foot}>
-          <button onClick={onClose} style={footBtn}>취소</button>
-          <button onClick={save} disabled={saving} style={{ ...footBtn, borderColor: '#2563eb', background: '#2563eb', color: '#fff', fontWeight: 700 }}>
+          <button style={btn} onClick={onClose}>
+            취소
+          </button>
+          <button
+            style={{ ...btn, borderColor: '#2563eb', color: '#2563eb' }}
+            onClick={save}
+            disabled={saving}
+          >
             {saving ? '저장 중…' : '저장'}
           </button>
         </div>
 
-        {/* ✅ AddDialog 모바일 1열 폼 */}
+        {/* ✅ 모바일에서는 라벨/입력 1열로 */}
         <style jsx>{`
           @media (max-width: 768px) {
             .add-grid {
               grid-template-columns: 1fr !important;
-              gap: 8px !important;
             }
             .add-grid label {
               font-size: 12px;
@@ -1160,3 +1257,4 @@ function num(v: any) {
   const n = parseFloat(String(v).replaceAll(',', ''));
   return Number.isFinite(n) ? n : null;
 }
+
