@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { supabase } from '../lib/supabase';
 import { useRouter } from 'next/navigation';
 
+// 탭 목록
 const TYPES = [
   '원룸',
   '투룸',
@@ -15,73 +17,55 @@ const TYPES = [
   '단독매매',
   '빌라매매',
   '토지',
-] as const;
-
+];
 const CREATE_TYPES = TYPES;
 
 export default function Home() {
   const router = useRouter();
 
-  // ------- 로그인 여부 확인 (기존 유지) --------
+  // ------- 로그인 여부 확인 (너가 쓰던 localStorage 방식 유지) --------
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const ok = localStorage.getItem('adminAuthed');
-    if (ok !== 'yes') window.location.assign('/login');
-  }, []);
-  // --------------------------------------------
+    if (ok !== 'yes') router.push('/login');
+  }, [router]);
+  // ----------------------------------------------------------------
 
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const [type, setType] = useState<(typeof TYPES)[number]>('원룸');
+  const [type, setType] = useState<string>('원룸'); // 기본 탭
   const [q, setQ] = useState('');
   const [openAdd, setOpenAdd] = useState(false);
 
-  // 인라인 수정
+  // 인라인 수정용
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>({});
 
   // 전체 검색 모드 여부
   const [isSearchMode, setIsSearchMode] = useState(false);
 
-  const isLandSaleType = type === '건물매매' || type === '단독매매' || type === '토지';
-  const isVillaSaleType = type === '빌라매매';
-  const isShopOrOffice = type === '상가' || type === '사무실';
-  const isAptType = type === '아파트';
-  const isLandOnly = type === '토지';
-
-  const prettyType = (t: string) =>
-    t === '건물매매' ? '건물 매매'
-    : t === '단독매매' ? '단독 매매'
-    : t === '빌라매매' ? '빌라 매매'
-    : t === '토지' ? '토지 매매'
-    : t;
-
-  const calcPyeongPrice = (r: any) => {
-    if (!r.land_area_m2 || !r.price_manwon) return '-';
-    const price = parseFloat(String(r.price_manwon).replaceAll(',', ''));
-    const land = Number(r.land_area_m2);
-    if (!Number.isFinite(price) || !Number.isFinite(land) || land === 0) return '-';
-    const pyeong = land / 3.3058;
-    const per = Math.round(price / pyeong);
-    return per.toLocaleString();
-  };
-
   /** 목록 불러오기 */
   const load = async () => {
     setLoading(true);
 
-    let query = supabase.from('listings').select('*').order('created_at', { ascending: false });
+    let query = supabase
+      .from('listings')
+      .select('*')
+      .order('created_at', { ascending: false });
+
     const keyword = q.trim();
 
     if (keyword) {
+      // 🔍 검색어가 있으면 전체에서 검색
       setIsSearchMode(true);
       query = query.or(
         `address.ilike.%${keyword}%,note.ilike.%${keyword}%,contact.ilike.%${keyword}%`
       );
     } else {
+      // 검색어 없으면 현재 탭(type) 기준
       setIsSearchMode(false);
-      query = query.eq('type', type);
+      if (type) query = query.eq('type', type);
     }
 
     const { data, error } = await query;
@@ -98,6 +82,7 @@ export default function Home() {
   };
 
   useEffect(() => {
+    // 탭 바꾸면 검색모드 해제 + 검색어 초기화 + 목록 로드
     setIsSearchMode(false);
     setQ('');
     setEditingId(null);
@@ -106,29 +91,43 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
 
-  /** 상태 변경 */
+  /** 상태 변경(진행중/계약완료) */
   const onChangeStatus = async (id: string, newStatus: string) => {
-    const { error } = await supabase.from('listings').update({ status: newStatus }).eq('id', id);
-    if (error) return alert('상태 변경 실패: ' + error.message);
-    setRows(prev => prev.map(r => (r.id === id ? { ...r, status: newStatus } : r)));
+    const { error } = await supabase
+      .from('listings')
+      .update({ status: newStatus })
+      .eq('id', id);
+
+    if (error) {
+      console.error(error);
+      alert('상태 변경 실패: ' + error.message);
+      return;
+    }
+    setRows(prev =>
+      prev.map(r => (r.id === id ? { ...r, status: newStatus } : r))
+    );
   };
 
   /** 삭제 */
   const onDelete = async (id: string) => {
-    if (!confirm('정말 삭제할까요?')) return;
+    if (!confirm('정말 이 매물을 삭제하시겠습니까?')) return;
     const { error } = await supabase.from('listings').delete().eq('id', id);
-    if (error) return alert('삭제 실패: ' + error.message);
+    if (error) {
+      console.error(error);
+      alert('삭제 실패: ' + error.message);
+      return;
+    }
     setRows(prev => prev.filter(r => r.id !== id));
   };
 
-  /** 초기화 */
+  /** 필터 초기화 */
   const resetFilters = () => {
     setType('원룸');
     setQ('');
     setIsSearchMode(false);
     setEditingId(null);
     setEditForm({});
-    // type 바뀌면 load 되니까 여기서는 그냥 처리만
+    load();
   };
 
   /** 인라인 수정 시작 */
@@ -162,8 +161,10 @@ export default function Home() {
 
     const payload = {
       address: editForm.address || null,
-      land_area_m2: editForm.land_area_m2 === '' ? null : Number(editForm.land_area_m2),
-      gross_area_m2: editForm.gross_area_m2 === '' ? null : Number(editForm.gross_area_m2),
+      land_area_m2:
+        editForm.land_area_m2 === '' ? null : Number(editForm.land_area_m2),
+      gross_area_m2:
+        editForm.gross_area_m2 === '' ? null : Number(editForm.gross_area_m2),
       floor: editForm.floor || null,
       price_manwon: editForm.price_manwon || null,
       maintenance: editForm.maintenance || null,
@@ -176,544 +177,696 @@ export default function Home() {
       expiry_date: editForm.expiry_date || null,
     };
 
-    const { error } = await supabase.from('listings').update(payload).eq('id', editingId);
-    if (error) return alert('수정 실패: ' + error.message);
+    const { error } = await supabase
+      .from('listings')
+      .update(payload)
+      .eq('id', editingId);
 
-    setRows(prev => prev.map(r => (r.id === editingId ? { ...r, ...payload } : r)));
+    if (error) {
+      console.error(error);
+      alert('수정 실패: ' + error.message);
+      return;
+    }
+
+    setRows(prev =>
+      prev.map(r => (r.id === editingId ? { ...r, ...payload } : r))
+    );
     setEditingId(null);
     setEditForm({});
   };
 
-  const filteredCountText = useMemo(() => {
-    if (loading) return '불러오는 중…';
-    if (isSearchMode) return `검색 결과 ${rows.length}건`;
-    return `총 ${rows.length}건`;
-  }, [loading, isSearchMode, rows.length]);
+  // ===== 테이블 종류 플래그 =====
+  const isLandSaleType =
+    type === '건물매매' || type === '단독매매' || type === '토지';
+  const isVillaSaleType = type === '빌라매매';
+  const isShopOrOffice = type === '상가' || type === '사무실';
+  const isAptType = type === '아파트';
+  const isLandOnly = type === '토지';
 
-  const cellInputClass =
-    "w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-black/10";
+  // 토지/건물 평당가 계산 (만원 기준)
+  const calcPyeongPrice = (r: any) => {
+    if (!r.land_area_m2 || !r.price_manwon) return '-';
+    const price = parseFloat(String(r.price_manwon).replaceAll(',', ''));
+    const land = Number(r.land_area_m2);
+    if (!Number.isFinite(price) || !Number.isFinite(land) || land === 0) return '-';
+    const pyeong = land / 3.3058;
+    const per = Math.round(price / pyeong);
+    return per.toLocaleString();
+  };
 
-  const statusSelectClass =
-    "border border-gray-300 rounded px-2 py-1 text-xs bg-white";
+  // ===== UI 스타일 =====
+  const tabBar: CSSProperties = {
+    display: 'flex',
+    gap: 6,
+    marginBottom: 10,
+    flexWrap: 'wrap',
+  };
+  const tabBtn = (active: boolean): CSSProperties => ({
+    padding: '6px 10px',
+    borderRadius: 8,
+    border: active ? '1px solid #2563eb' : '1px solid #d1d5db',
+    background: active ? '#dbeafe' : '#fff',
+    color: active ? '#1d4ed8' : '#111827',
+    fontSize: 13,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  });
 
-  // ===== 모바일 카드에서 보여줄 핵심 필드 묶기 =====
-  const cardTitle = (r: any) => `${r.type ?? '-'} · ${r.address ?? '-'}`;
+  const searchWrap: CSSProperties = {
+    display: 'flex',
+    gap: 8,
+    marginBottom: 10,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  };
+  const searchInput: CSSProperties = {
+    flex: 1,
+    minWidth: 220,
+    padding: '8px 10px',
+    borderRadius: 8,
+    border: '1px solid #d1d5db',
+    outline: 'none',
+  };
+  const btn: CSSProperties = {
+    padding: '8px 12px',
+    borderRadius: 8,
+    border: '1px solid #d1d5db',
+    background: '#fff',
+    cursor: 'pointer',
+    fontSize: 13,
+    whiteSpace: 'nowrap', // ✅ “검색초기화” 같은 줄바꿈 방지
+  };
+
+  const primaryBtn: CSSProperties = {
+    padding: '8px 12px',
+    borderRadius: 10,
+    border: '1px solid #2563eb',
+    background: '#2563eb',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+  };
+
+  const cellInput: CSSProperties = {
+    width: '100%',
+    padding: '3px 6px', // ✅ 타이트
+    borderRadius: 6,
+    border: '1px solid #d1d5db',
+    fontSize: 12,
+    outline: 'none',
+  };
 
   return (
-    <div className="min-h-screen p-4 md:p-6">
-      <div className="w-full max-w-[1600px] mx-auto space-y-4">
+    <main className="page-main" style={{ padding: 16, maxWidth: 1400, margin: '0 auto' }}>
+      <div className="header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>매물 관리</h1>
+      </div>
 
-        {/* 헤더 */}
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold">매물 관리</h1>
-            <div className="text-sm text-gray-500">중앙공인중개사사무소 전용 사이트입니다!</div>
-          </div>
-
+      {/* 유형 탭 */}
+      <div style={tabBar} className="tab-bar">
+        {TYPES.map(t => (
           <button
-            onClick={() => setOpenAdd(true)}
-            className="bg-black text-white px-3 py-2 rounded"
+            key={t}
+            style={tabBtn(t === type)}
+            onClick={() => {
+              setType(t);
+              setQ('');
+              setIsSearchMode(false);
+              setEditingId(null);
+              setEditForm({});
+            }}
           >
-            + 매물 추가
+            {t === '건물매매'
+              ? '건물 매매'
+              : t === '단독매매'
+              ? '단독 매매'
+              : t === '빌라매매'
+              ? '빌라 매매'
+              : t === '토지'
+              ? '토지 매매'
+              : t}
           </button>
-        </div>
+        ))}
+      </div>
 
-        {/* 탭 */}
-        <div className="flex flex-wrap gap-2 border rounded p-3">
-          {TYPES.map(t => (
-            <button
-              key={t}
-              onClick={() => setType(t)}
-              className={[
-                "px-3 py-1 rounded text-sm border",
-                type === t ? "bg-black text-white border-black" : "bg-white hover:bg-gray-50"
-              ].join(" ")}
-            >
-              {prettyType(t)}
-            </button>
-          ))}
-        </div>
+      {/* 검색 + 버튼들 */}
+      <div style={searchWrap} className="search-row">
+        <input
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') load();
+          }}
+          placeholder="주소 / 비고 / 연락처 검색 (전체에서 검색)"
+          style={searchInput}
+        />
+        <button style={btn} onClick={load}>검색</button>
+        <button style={btn} onClick={resetFilters}>초기화</button>
+        <button onClick={() => setOpenAdd(true)} style={primaryBtn}>+ 매물 추가</button>
+      </div>
 
-        {/* 검색 / 버튼 */}
-        <div className="border rounded p-3 space-y-3">
-          <div className="flex flex-col md:flex-row gap-2">
-            <input
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') load(); }}
-              placeholder="주소 / 비고 / 연락처 검색 (전체 검색)"
-              className="border rounded px-3 py-2 text-sm w-full md:flex-1"
-            />
-            <button onClick={load} className="border rounded px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap">
-              검색
-            </button>
-            <button onClick={resetFilters} className="border rounded px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap">
-              초기화
-            </button>
-            <button onClick={load} className="border rounded px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap">
-              새로고침
-            </button>
-          </div>
+      <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 6 }}>
+        {loading ? '불러오는 중…' : isSearchMode ? `검색 결과 ${rows.length}건` : `총 ${rows.length}건`}
+      </div>
 
-          <div className="text-sm text-gray-600">{filteredCountText}</div>
-        </div>
+      {/* 표 */}
+      <div className="table-wrap" style={{ overflowX: 'auto', border: '1px solid #d1d5db', borderRadius: 10 }}>
+        {isSearchMode ? (
+          <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead style={{ background: '#f9fafb' }}>
+              <tr>
+                {['번호','유형','주소','가격(만원)','층수','건축물 용도','연락처','상태','작업'].map(h => (
+                  <th key={h} style={thStyle()}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, idx) => {
+                const isDone = r.status === '계약완료';
+                const isEditing = editingId === r.id;
+                const isRowApt = r.type === '아파트';
 
-        {/* ✅ 모바일: 카드뷰 */}
-        <div className="md:hidden space-y-2">
-          {loading ? (
-            <div className="border rounded p-3 text-sm">불러오는중...</div>
-          ) : rows.length === 0 ? (
-            <div className="border rounded p-3 text-sm">데이터 없음</div>
-          ) : (
-            rows.map((r) => {
-              const isDone = r.status === '계약완료';
-              const isEditing = editingId === r.id;
+                return (
+                  <tr key={r.id} style={{ background: isDone ? '#fef2f2' : '#fff' }}>
+                    <td style={tdStyle(true)}>{idx + 1}</td>
+                    <td style={tdStyle(true)}>{r.type}</td>
 
-              return (
-                <div key={r.id} className={`border rounded p-3 space-y-2 ${isDone ? "bg-red-50" : ""}`}>
-                  <div className="font-semibold text-sm">{cardTitle(r)}</div>
+                    <td style={tdStyle()}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.address ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, address: e.target.value }))} />
+                      ) : r.address}
+                    </td>
 
-                  <div className="text-xs text-gray-700 space-y-1">
-                    <div>가격: {r.price_manwon ?? "-"}</div>
-                    <div>층수: {r.floor ?? "-"}</div>
-                    <div>연락처: {r.contact ?? "-"}</div>
-                    <div>비고: {r.note ?? "-"}</div>
-                  </div>
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.price_manwon ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, price_manwon: e.target.value }))} />
+                      ) : (r.price_manwon ?? '-') as string}
+                    </td>
 
-                  <div className="flex items-center justify-between gap-2">
-                    <select
-                      value={r.status || '진행중'}
-                      onChange={e => onChangeStatus(r.id, e.target.value)}
-                      className={statusSelectClass}
-                    >
-                      <option value="진행중">진행중</option>
-                      <option value="계약완료">계약완료</option>
-                    </select>
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.floor ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, floor: e.target.value }))} />
+                      ) : r.floor ?? '-'}
+                    </td>
 
-                    <div className="flex gap-2">
+                    <td style={tdStyle()}>
+                      {isRowApt ? '-' : isEditing ? (
+                        <input style={cellInput} value={editForm.bldg_use ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, bldg_use: e.target.value }))} />
+                      ) : r.bldg_use ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.contact ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, contact: e.target.value }))} />
+                      ) : r.contact ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      <select value={r.status || '진행중'} onChange={e => onChangeStatus(r.id, e.target.value)} style={statusSelectStyle(r.status)}>
+                        <option value="진행중">진행중</option>
+                        <option value="계약완료">계약완료</option>
+                      </select>
+                    </td>
+
+                    <td style={tdStyle(true)}>
                       {isEditing ? (
                         <>
-                          <button onClick={saveEdit} className="border rounded px-3 py-1 text-sm">저장</button>
-                          <button onClick={cancelEdit} className="border rounded px-3 py-1 text-sm">취소</button>
+                          <button onClick={saveEdit} style={miniBtnPrimary}>저장</button>
+                          <button onClick={cancelEdit} style={miniBtn}>취소</button>
                         </>
                       ) : (
                         <>
-                          <button onClick={() => startEdit(r)} className="border rounded px-3 py-1 text-sm">수정</button>
-                          <button onClick={() => onDelete(r.id)} className="border rounded px-3 py-1 text-sm text-red-600">삭제</button>
+                          <button onClick={() => startEdit(r)} style={miniBtnBlue}>수정</button>
+                          <button onClick={() => onDelete(r.id)} style={miniBtnRed}>삭제</button>
                         </>
                       )}
-                    </div>
-                  </div>
-
-                  {/* 모바일 인라인 편집 폼(간단) */}
-                  {isEditing && (
-                    <div className="grid grid-cols-1 gap-2 pt-2">
-                      <input className={cellInputClass} value={editForm.address ?? ''} onChange={e => setEditForm((f:any)=>({...f,address:e.target.value}))} placeholder="주소" />
-                      <input className={cellInputClass} value={editForm.price_manwon ?? ''} onChange={e => setEditForm((f:any)=>({...f,price_manwon:e.target.value}))} placeholder="가격(만원)" />
-                      <input className={cellInputClass} value={editForm.floor ?? ''} onChange={e => setEditForm((f:any)=>({...f,floor:e.target.value}))} placeholder="층수" />
-                      <input className={cellInputClass} value={editForm.contact ?? ''} onChange={e => setEditForm((f:any)=>({...f,contact:e.target.value}))} placeholder="연락처" />
-                      <input className={cellInputClass} value={editForm.note ?? ''} onChange={e => setEditForm((f:any)=>({...f,note:e.target.value}))} placeholder="비고" />
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* ✅ PC: 테이블뷰 */}
-        <div className="hidden md:block overflow-auto border rounded">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                {/* 헤더를 현재 모드에 맞춰서 동적으로 */}
-                {isSearchMode ? (
-                  ["번호","유형","주소","가격(만원)","층수","건축물 용도","연락처","상태","작업"].map(h => (
-                    <th key={h} className="border border-gray-300 py-2 px-3 text-left font-semibold whitespace-nowrap">{h}</th>
-                  ))
-                ) : isLandSaleType ? (
-                  ["번호","주소","대지면적(㎡)", ...(isLandOnly ? [] : ["연면적(㎡)"]), "매매가(만원)","평당가(만원)","연락처","비고","계약일","상태","작업"].map(h => (
-                    <th key={h} className="border border-gray-300 py-2 px-3 text-left font-semibold whitespace-nowrap">{h}</th>
-                  ))
-                ) : isVillaSaleType ? (
-                  ["번호","주소","전용면적(㎡)","대지지분(㎡)","층수","매매가(만원)","관리비","옵션","연락처","비고","계약일","상태","작업"].map(h => (
-                    <th key={h} className="border border-gray-300 py-2 px-3 text-left font-semibold whitespace-nowrap">{h}</th>
-                  ))
-                ) : (
-                  ["번호","주소","전용면적(㎡)","층수","가격(만원)","관리비", isShopOrOffice ? "권리금(만원)" : "옵션", ...(isAptType ? [] : ["건축물 용도"]), "연락처","비고","계약일","만료일","상태","작업"].map(h => (
-                    <th key={h} className="border border-gray-300 py-2 px-3 text-left font-semibold whitespace-nowrap">{h}</th>
-                  ))
-                )}
-              </tr>
-            </thead>
-
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={20} className="border border-gray-300 py-3 px-3">불러오는중...</td></tr>
-              ) : rows.length === 0 ? (
-                <tr><td colSpan={20} className="border border-gray-300 py-3 px-3">데이터 없음</td></tr>
-              ) : (
-                rows.map((r, idx) => {
-                  const isDone = r.status === '계약완료';
-                  const isEditing = editingId === r.id;
-                  const rowIsBiz = r.type === '상가' || r.type === '사무실';
-                  const rowIsApt = r.type === '아파트';
-
-                  const td = "border border-gray-300 py-2 px-3 whitespace-nowrap";
-                  const tdL = "border border-gray-300 py-2 px-3";
-                  const rowClass = isDone ? "bg-red-50" : "";
-
-                  // ====== 전체검색용 테이블 ======
-                  if (isSearchMode) {
-                    return (
-                      <tr key={r.id} className={`hover:bg-gray-50 ${rowClass}`}>
-                        <td className={td}>{idx + 1}</td>
-                        <td className={td}>{r.type ?? "-"}</td>
-
-                        <td className={tdL}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.address ?? ''} onChange={e=>setEditForm((f:any)=>({...f,address:e.target.value}))}/>
-                          ) : (r.address ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.price_manwon ?? ''} onChange={e=>setEditForm((f:any)=>({...f,price_manwon:e.target.value}))}/>
-                          ) : (r.price_manwon ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.floor ?? ''} onChange={e=>setEditForm((f:any)=>({...f,floor:e.target.value}))}/>
-                          ) : (r.floor ?? "-")}
-                        </td>
-
-                        <td className={tdL}>
-                          {rowIsApt ? "-" : (isEditing ? (
-                            <input className={cellInputClass} value={editForm.bldg_use ?? ''} onChange={e=>setEditForm((f:any)=>({...f,bldg_use:e.target.value}))}/>
-                          ) : (r.bldg_use ?? "-"))}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.contact ?? ''} onChange={e=>setEditForm((f:any)=>({...f,contact:e.target.value}))}/>
-                          ) : (r.contact ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          <select className={statusSelectClass} value={r.status || '진행중'} onChange={e=>onChangeStatus(r.id, e.target.value)}>
-                            <option value="진행중">진행중</option>
-                            <option value="계약완료">계약완료</option>
-                          </select>
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <>
-                              <button onClick={saveEdit} className="text-blue-600 mr-2">저장</button>
-                              <button onClick={cancelEdit} className="text-gray-600">취소</button>
-                            </>
-                          ) : (
-                            <>
-                              <button onClick={() => startEdit(r)} className="text-blue-600 mr-2">수정</button>
-                              <button onClick={() => onDelete(r.id)} className="text-red-600">삭제</button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  }
-
-                  // ====== 토지/건물 매매 테이블 ======
-                  if (isLandSaleType) {
-                    return (
-                      <tr key={r.id} className={`hover:bg-gray-50 ${rowClass}`}>
-                        <td className={td}>{idx + 1}</td>
-
-                        <td className={tdL}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.address ?? ''} onChange={e=>setEditForm((f:any)=>({...f,address:e.target.value}))}/>
-                          ) : (r.address ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.land_area_m2 ?? ''} onChange={e=>setEditForm((f:any)=>({...f,land_area_m2:e.target.value}))}/>
-                          ) : (r.land_area_m2 ?? "-")}
-                        </td>
-
-                        {!isLandOnly && (
-                          <td className={td}>
-                            {isEditing ? (
-                              <input className={cellInputClass} value={editForm.gross_area_m2 ?? ''} onChange={e=>setEditForm((f:any)=>({...f,gross_area_m2:e.target.value}))}/>
-                            ) : (r.gross_area_m2 ?? "-")}
-                          </td>
-                        )}
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.price_manwon ?? ''} onChange={e=>setEditForm((f:any)=>({...f,price_manwon:e.target.value}))}/>
-                          ) : (r.price_manwon ?? "-")}
-                        </td>
-
-                        <td className={td}>{calcPyeongPrice(r)}</td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.contact ?? ''} onChange={e=>setEditForm((f:any)=>({...f,contact:e.target.value}))}/>
-                          ) : (r.contact ?? "-")}
-                        </td>
-
-                        <td className={tdL}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.note ?? ''} onChange={e=>setEditForm((f:any)=>({...f,note:e.target.value}))}/>
-                          ) : (r.note ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input type="date" className={cellInputClass} value={editForm.contract_date ?? ''} onChange={e=>setEditForm((f:any)=>({...f,contract_date:e.target.value}))}/>
-                          ) : (r.contract_date ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          <select className={statusSelectClass} value={r.status || '진행중'} onChange={e=>onChangeStatus(r.id, e.target.value)}>
-                            <option value="진행중">진행중</option>
-                            <option value="계약완료">계약완료</option>
-                          </select>
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <>
-                              <button onClick={saveEdit} className="text-blue-600 mr-2">저장</button>
-                              <button onClick={cancelEdit} className="text-gray-600">취소</button>
-                            </>
-                          ) : (
-                            <>
-                              <button onClick={() => startEdit(r)} className="text-blue-600 mr-2">수정</button>
-                              <button onClick={() => onDelete(r.id)} className="text-red-600">삭제</button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  }
-
-                  // ====== 빌라매매 테이블 ======
-                  if (isVillaSaleType) {
-                    return (
-                      <tr key={r.id} className={`hover:bg-gray-50 ${rowClass}`}>
-                        <td className={td}>{idx + 1}</td>
-
-                        <td className={tdL}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.address ?? ''} onChange={e=>setEditForm((f:any)=>({...f,address:e.target.value}))}/>
-                          ) : (r.address ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.gross_area_m2 ?? ''} onChange={e=>setEditForm((f:any)=>({...f,gross_area_m2:e.target.value}))}/>
-                          ) : (r.gross_area_m2 ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.land_area_m2 ?? ''} onChange={e=>setEditForm((f:any)=>({...f,land_area_m2:e.target.value}))}/>
-                          ) : (r.land_area_m2 ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.floor ?? ''} onChange={e=>setEditForm((f:any)=>({...f,floor:e.target.value}))}/>
-                          ) : (r.floor ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.price_manwon ?? ''} onChange={e=>setEditForm((f:any)=>({...f,price_manwon:e.target.value}))}/>
-                          ) : (r.price_manwon ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.maintenance ?? ''} onChange={e=>setEditForm((f:any)=>({...f,maintenance:e.target.value}))}/>
-                          ) : (r.maintenance ?? "-")}
-                        </td>
-
-                        <td className={tdL}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.options ?? ''} onChange={e=>setEditForm((f:any)=>({...f,options:e.target.value}))}/>
-                          ) : (r.options ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.contact ?? ''} onChange={e=>setEditForm((f:any)=>({...f,contact:e.target.value}))}/>
-                          ) : (r.contact ?? "-")}
-                        </td>
-
-                        <td className={tdL}>
-                          {isEditing ? (
-                            <input className={cellInputClass} value={editForm.note ?? ''} onChange={e=>setEditForm((f:any)=>({...f,note:e.target.value}))}/>
-                          ) : (r.note ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <input type="date" className={cellInputClass} value={editForm.contract_date ?? ''} onChange={e=>setEditForm((f:any)=>({...f,contract_date:e.target.value}))}/>
-                          ) : (r.contract_date ?? "-")}
-                        </td>
-
-                        <td className={td}>
-                          <select className={statusSelectClass} value={r.status || '진행중'} onChange={e=>onChangeStatus(r.id, e.target.value)}>
-                            <option value="진행중">진행중</option>
-                            <option value="계약완료">계약완료</option>
-                          </select>
-                        </td>
-
-                        <td className={td}>
-                          {isEditing ? (
-                            <>
-                              <button onClick={saveEdit} className="text-blue-600 mr-2">저장</button>
-                              <button onClick={cancelEdit} className="text-gray-600">취소</button>
-                            </>
-                          ) : (
-                            <>
-                              <button onClick={() => startEdit(r)} className="text-blue-600 mr-2">수정</button>
-                              <button onClick={() => onDelete(r.id)} className="text-red-600">삭제</button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  }
-
-                  // ====== 일반 임대(원룸/투룸/쓰리룸/아파트/상가/사무실) ======
-                  return (
-                    <tr key={r.id} className={`hover:bg-gray-50 ${rowClass}`}>
-                      <td className={td}>{idx + 1}</td>
-
-                      <td className={tdL}>
-                        {isEditing ? (
-                          <input className={cellInputClass} value={editForm.address ?? ''} onChange={e=>setEditForm((f:any)=>({...f,address:e.target.value}))}/>
-                        ) : (r.address ?? "-")}
-                      </td>
-
-                      <td className={td}>
-                        {isEditing ? (
-                          <input className={cellInputClass} value={editForm.gross_area_m2 ?? ''} onChange={e=>setEditForm((f:any)=>({...f,gross_area_m2:e.target.value}))}/>
-                        ) : (r.gross_area_m2 ?? "-")}
-                      </td>
-
-                      <td className={td}>
-                        {isEditing ? (
-                          <input className={cellInputClass} value={editForm.floor ?? ''} onChange={e=>setEditForm((f:any)=>({...f,floor:e.target.value}))}/>
-                        ) : (r.floor ?? "-")}
-                      </td>
-
-                      <td className={td}>
-                        {isEditing ? (
-                          <input className={cellInputClass} value={editForm.price_manwon ?? ''} onChange={e=>setEditForm((f:any)=>({...f,price_manwon:e.target.value}))}/>
-                        ) : (r.price_manwon ?? "-")}
-                      </td>
-
-                      <td className={td}>
-                        {isEditing ? (
-                          <input className={cellInputClass} value={editForm.maintenance ?? ''} onChange={e=>setEditForm((f:any)=>({...f,maintenance:e.target.value}))}/>
-                        ) : (r.maintenance ?? "-")}
-                      </td>
-
-                      <td className={tdL}>
-                        {isEditing ? (
-                          <input
-                            className={cellInputClass}
-                            value={rowIsBiz ? (editForm.premium ?? '') : (editForm.options ?? '')}
-                            onChange={e=>setEditForm((f:any)=>({...f, ...(rowIsBiz ? {premium:e.target.value} : {options:e.target.value}) }))}
-                          />
-                        ) : (rowIsBiz ? (r.premium ?? "-") : (r.options ?? "-"))}
-                      </td>
-
-                      {!isAptType && (
-                        <td className={tdL}>
-                          {rowIsApt ? "-" : (
-                            isEditing ? (
-                              <input className={cellInputClass} value={editForm.bldg_use ?? ''} onChange={e=>setEditForm((f:any)=>({...f,bldg_use:e.target.value}))}/>
-                            ) : (r.bldg_use ?? "-")
-                          )}
-                        </td>
-                      )}
-
-                      <td className={td}>
-                        {isEditing ? (
-                          <input className={cellInputClass} value={editForm.contact ?? ''} onChange={e=>setEditForm((f:any)=>({...f,contact:e.target.value}))}/>
-                        ) : (r.contact ?? "-")}
-                      </td>
-
-                      <td className={tdL}>
-                        {isEditing ? (
-                          <input className={cellInputClass} value={editForm.note ?? ''} onChange={e=>setEditForm((f:any)=>({...f,note:e.target.value}))}/>
-                        ) : (r.note ?? "-")}
-                      </td>
-
-                      <td className={td}>
-                        {isEditing ? (
-                          <input type="date" className={cellInputClass} value={editForm.contract_date ?? ''} onChange={e=>setEditForm((f:any)=>({...f,contract_date:e.target.value}))}/>
-                        ) : (r.contract_date ?? "-")}
-                      </td>
-
-                      <td className={td}>
-                        {isEditing ? (
-                          <input type="date" className={cellInputClass} value={editForm.expiry_date ?? ''} onChange={e=>setEditForm((f:any)=>({...f,expiry_date:e.target.value}))}/>
-                        ) : (r.expiry_date ?? "-")}
-                      </td>
-
-                      <td className={td}>
-                        <select className={statusSelectClass} value={r.status || '진행중'} onChange={e=>onChangeStatus(r.id, e.target.value)}>
-                          <option value="진행중">진행중</option>
-                          <option value="계약완료">계약완료</option>
-                        </select>
-                      </td>
-
-                      <td className={td}>
-                        {isEditing ? (
-                          <>
-                            <button onClick={saveEdit} className="text-blue-600 mr-2">저장</button>
-                            <button onClick={cancelEdit} className="text-gray-600">취소</button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => startEdit(r)} className="text-blue-600 mr-2">수정</button>
-                            <button onClick={() => onDelete(r.id)} className="text-red-600">삭제</button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
+                    </td>
+                  </tr>
+                );
+              })}
+              {!loading && rows.length === 0 && (
+                <tr><td colSpan={9} style={{ padding: 14, textAlign: 'center', color: '#9ca3af' }}>데이터가 없습니다.</td></tr>
               )}
             </tbody>
           </table>
-        </div>
+        ) : isLandSaleType ? (
+          <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead style={{ background: '#f9fafb' }}>
+              <tr>
+                {[
+                  '번호','주소','대지면적(㎡)', ...(isLandOnly ? [] : ['연면적(㎡)']),
+                  '매매가(만원)','평당가(만원)','연락처','비고','계약일','상태','작업'
+                ].map(h => <th key={h} style={thStyle()}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, idx) => {
+                const isDone = r.status === '계약완료';
+                const isEditing = editingId === r.id;
 
-        {/* 매물 추가 모달 */}
-        {openAdd && (
-          <AddDialog
-            currentType={type}
-            onClose={() => setOpenAdd(false)}
-            onSaved={() => {
-              setOpenAdd(false);
-              load();
-            }}
-          />
+                return (
+                  <tr key={r.id} style={{ background: isDone ? '#fef2f2' : '#fff' }}>
+                    <td style={tdStyle(true)}>{idx + 1}</td>
+
+                    <td style={tdStyle()}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.address ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, address: e.target.value }))} />
+                      ) : r.address}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.land_area_m2 ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, land_area_m2: e.target.value }))} />
+                      ) : r.land_area_m2 ?? '-'}
+                    </td>
+
+                    {!isLandOnly && (
+                      <td style={tdStyle(true)}>
+                        {isEditing ? (
+                          <input style={cellInput} value={editForm.gross_area_m2 ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, gross_area_m2: e.target.value }))} />
+                        ) : r.gross_area_m2 ?? '-'}
+                      </td>
+                    )}
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.price_manwon ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, price_manwon: e.target.value }))} />
+                      ) : (r.price_manwon ?? '-') as string}
+                    </td>
+
+                    <td style={tdStyle(true)}>{calcPyeongPrice(r)}</td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.contact ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, contact: e.target.value }))} />
+                      ) : r.contact ?? '-'}
+                    </td>
+
+                    <td style={tdStyle()}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.note ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, note: e.target.value }))} />
+                      ) : r.note ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input type="date" style={cellInput} value={editForm.contract_date ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, contract_date: e.target.value }))} />
+                      ) : r.contract_date ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      <select value={r.status || '진행중'} onChange={e => onChangeStatus(r.id, e.target.value)} style={statusSelectStyle(r.status)}>
+                        <option value="진행중">진행중</option>
+                        <option value="계약완료">계약완료</option>
+                      </select>
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <>
+                          <button onClick={saveEdit} style={miniBtnPrimary}>저장</button>
+                          <button onClick={cancelEdit} style={miniBtn}>취소</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => startEdit(r)} style={miniBtnBlue}>수정</button>
+                          <button onClick={() => onDelete(r.id)} style={miniBtnRed}>삭제</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!loading && rows.length === 0 && (
+                <tr>
+                  <td colSpan={isLandOnly ? 10 : 11} style={{ padding: 14, textAlign: 'center', color: '#9ca3af' }}>
+                    데이터가 없습니다.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        ) : isVillaSaleType ? (
+          <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead style={{ background: '#f9fafb' }}>
+              <tr>
+                {[
+                  '번호','주소','전용면적(㎡)','대지지분(㎡)','층수','매매가(만원)','관리비','옵션','연락처','비고','계약일','상태','작업'
+                ].map(h => <th key={h} style={thStyle()}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, idx) => {
+                const isDone = r.status === '계약완료';
+                const isEditing = editingId === r.id;
+
+                return (
+                  <tr key={r.id} style={{ background: isDone ? '#fef2f2' : '#fff' }}>
+                    <td style={tdStyle(true)}>{idx + 1}</td>
+
+                    <td style={tdStyle()}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.address ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, address: e.target.value }))} />
+                      ) : r.address}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.gross_area_m2 ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, gross_area_m2: e.target.value }))} />
+                      ) : r.gross_area_m2 ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.land_area_m2 ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, land_area_m2: e.target.value }))} />
+                      ) : r.land_area_m2 ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.floor ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, floor: e.target.value }))} />
+                      ) : r.floor ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.price_manwon ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, price_manwon: e.target.value }))} />
+                      ) : (r.price_manwon ?? '-') as string}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.maintenance ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, maintenance: e.target.value }))} />
+                      ) : r.maintenance ?? '-'}
+                    </td>
+
+                    <td style={tdStyle()}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.options ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, options: e.target.value }))} />
+                      ) : r.options ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.contact ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, contact: e.target.value }))} />
+                      ) : r.contact ?? '-'}
+                    </td>
+
+                    <td style={tdStyle()}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.note ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, note: e.target.value }))} />
+                      ) : r.note ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input type="date" style={cellInput} value={editForm.contract_date ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, contract_date: e.target.value }))} />
+                      ) : r.contract_date ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      <select value={r.status || '진행중'} onChange={e => onChangeStatus(r.id, e.target.value)} style={statusSelectStyle(r.status)}>
+                        <option value="진행중">진행중</option>
+                        <option value="계약완료">계약완료</option>
+                      </select>
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <>
+                          <button onClick={saveEdit} style={miniBtnPrimary}>저장</button>
+                          <button onClick={cancelEdit} style={miniBtn}>취소</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => startEdit(r)} style={miniBtnBlue}>수정</button>
+                          <button onClick={() => onDelete(r.id)} style={miniBtnRed}>삭제</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!loading && rows.length === 0 && (
+                <tr><td colSpan={13} style={{ padding: 14, textAlign: 'center', color: '#9ca3af' }}>데이터가 없습니다.</td></tr>
+              )}
+            </tbody>
+          </table>
+        ) : (
+          <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead style={{ background: '#f9fafb' }}>
+              <tr>
+                <th style={thStyle()}>번호</th>
+                <th style={thStyle()}>주소</th>
+                <th style={thStyle()}>전용면적(㎡)</th>
+                <th style={thStyle()}>층수</th>
+                <th style={thStyle()}>가격(만원)</th>
+                <th style={thStyle()}>관리비</th>
+                <th style={thStyle()}>{isShopOrOffice ? '권리금(만원)' : '옵션'}</th>
+                {!isAptType && <th style={thStyle()}>건축물 용도</th>}
+                <th style={thStyle()}>연락처</th>
+                <th style={thStyle()}>비고</th>
+                <th style={thStyle()}>계약일</th>
+                <th style={thStyle()}>만료일</th>
+                <th style={thStyle()}>상태</th>
+                <th style={thStyle()}>작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, idx) => {
+                const isDone = r.status === '계약완료';
+                const isEditing = editingId === r.id;
+                const rowIsBiz = r.type === '상가' || r.type === '사무실';
+
+                return (
+                  <tr key={r.id} style={{ background: isDone ? '#fef2f2' : '#fff' }}>
+                    <td style={tdStyle(true)}>{idx + 1}</td>
+
+                    <td style={tdStyle()}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.address ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, address: e.target.value }))} />
+                      ) : r.address}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.gross_area_m2 ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, gross_area_m2: e.target.value }))} />
+                      ) : r.gross_area_m2 ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.floor ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, floor: e.target.value }))} />
+                      ) : r.floor ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.price_manwon ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, price_manwon: e.target.value }))} />
+                      ) : (r.price_manwon ?? '-') as string}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.maintenance ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, maintenance: e.target.value }))} />
+                      ) : r.maintenance ?? '-'}
+                    </td>
+
+                    <td style={tdStyle()}>
+                      {isEditing ? (
+                        <input
+                          style={cellInput}
+                          value={rowIsBiz ? editForm.premium ?? '' : editForm.options ?? ''}
+                          onChange={e =>
+                            setEditForm((f: any) => ({
+                              ...f,
+                              ...(rowIsBiz ? { premium: e.target.value } : { options: e.target.value }),
+                            }))
+                          }
+                        />
+                      ) : rowIsBiz ? (
+                        r.premium ?? '-'
+                      ) : (
+                        r.options ?? '-'
+                      )}
+                    </td>
+
+                    {!isAptType && (
+                      <td style={tdStyle()}>
+                        {isEditing ? (
+                          <input style={cellInput} value={editForm.bldg_use ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, bldg_use: e.target.value }))} />
+                        ) : r.bldg_use ?? '-'}
+                      </td>
+                    )}
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.contact ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, contact: e.target.value }))} />
+                      ) : r.contact ?? '-'}
+                    </td>
+
+                    <td style={tdStyle()}>
+                      {isEditing ? (
+                        <input style={cellInput} value={editForm.note ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, note: e.target.value }))} />
+                      ) : r.note ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input type="date" style={cellInput} value={editForm.contract_date ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, contract_date: e.target.value }))} />
+                      ) : r.contract_date ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <input type="date" style={cellInput} value={editForm.expiry_date ?? ''} onChange={e => setEditForm((f:any)=>({ ...f, expiry_date: e.target.value }))} />
+                      ) : r.expiry_date ?? '-'}
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      <select value={r.status || '진행중'} onChange={e => onChangeStatus(r.id, e.target.value)} style={statusSelectStyle(r.status)}>
+                        <option value="진행중">진행중</option>
+                        <option value="계약완료">계약완료</option>
+                      </select>
+                    </td>
+
+                    <td style={tdStyle(true)}>
+                      {isEditing ? (
+                        <>
+                          <button onClick={saveEdit} style={miniBtnPrimary}>저장</button>
+                          <button onClick={cancelEdit} style={miniBtn}>취소</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => startEdit(r)} style={miniBtnBlue}>수정</button>
+                          <button onClick={() => onDelete(r.id)} style={miniBtnRed}>삭제</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!loading && rows.length === 0 && (
+                <tr>
+                  <td colSpan={isAptType ? 13 : 14} style={{ padding: 14, textAlign: 'center', color: '#9ca3af' }}>
+                    데이터가 없습니다.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         )}
       </div>
-    </div>
+
+      {/* 매물 추가 모달 */}
+      {openAdd && (
+        <AddDialog
+          currentType={type}
+          onClose={() => setOpenAdd(false)}
+          onSaved={() => {
+            setOpenAdd(false);
+            load();
+          }}
+        />
+      )}
+
+      {/* ✅ 모바일/반응형 */}
+      <style jsx>{`
+        .page-main { box-sizing: border-box; }
+
+        @media (max-width: 768px) {
+          .page-main { padding: 12px 10px !important; }
+
+          .search-row {
+            flex-direction: column;
+            align-items: stretch !important;
+          }
+          .search-row input { width: 100%; min-width: 0 !important; }
+          .search-row button { width: 100%; }
+
+          .data-table { font-size: 12px !important; min-width: 860px; }
+        }
+      `}</style>
+    </main>
   );
 }
 
-/** 매물 추가 다이얼로그 - 디자인만 테일윈드로 변경 */
+/** 헤더 셀 */
+function thStyle(): CSSProperties {
+  return {
+    borderBottom: '1px solid #e5e7eb',
+    borderRight: '1px solid #e5e7eb',
+    padding: '8px 8px',
+    textAlign: 'center',
+    whiteSpace: 'nowrap',
+    position: 'sticky' as any,
+    top: 0,
+    background: '#f9fafb',
+    zIndex: 1,
+    fontWeight: 700,
+  };
+}
+
+/** 바디 셀 */
+function tdStyle(center = false): CSSProperties {
+  return {
+    padding: '6px 8px', // ✅ 행 높이 낮춤
+    borderBottom: '1px solid #eef2f7',
+    borderRight: '1px solid #eef2f7',
+    textAlign: center ? 'center' : 'left',
+    whiteSpace: 'nowrap',
+    verticalAlign: 'middle',
+  };
+}
+
+const miniBtn: CSSProperties = {
+  padding: '4px 8px',
+  borderRadius: 8,
+  border: '1px solid #d1d5db',
+  background: '#fff',
+  fontSize: 12,
+  cursor: 'pointer',
+  marginLeft: 4,
+  whiteSpace: 'nowrap',
+};
+
+const miniBtnPrimary: CSSProperties = {
+  ...miniBtn,
+  borderColor: '#111827',
+  background: '#111827',
+  color: '#fff',
+};
+
+const miniBtnBlue: CSSProperties = {
+  ...miniBtn,
+  borderColor: '#60a5fa',
+  background: '#dbeafe',
+  color: '#1d4ed8',
+};
+
+const miniBtnRed: CSSProperties = {
+  ...miniBtn,
+  borderColor: '#fca5a5',
+  background: '#fef2f2',
+  color: '#b91c1c',
+};
+
+function statusSelectStyle(status?: string): CSSProperties {
+  const done = status === '계약완료';
+  return {
+    padding: '4px 8px',
+    borderRadius: 8,
+    border: done ? '1px solid #fca5a5' : '1px solid #d1d5db',
+    color: done ? '#b91c1c' : '#111827',
+    background: '#fff',
+    fontSize: 12,
+    outline: 'none',
+  };
+}
+
+/** 매물 추가 다이얼로그 (✅ 모바일 완벽 대응 버전) */
 function AddDialog({
   onClose,
   onSaved,
@@ -741,7 +894,8 @@ function AddDialog({
   });
   const [saving, setSaving] = useState(false);
 
-  const isLandSaleType = form.type === '건물매매' || form.type === '단독매매' || form.type === '토지';
+  const isLandSaleType =
+    form.type === '건물매매' || form.type === '단독매매' || form.type === '토지';
   const isVillaSaleType = form.type === '빌라매매';
   const isBizLease = form.type === '상가' || form.type === '사무실';
   const isLandOnly = form.type === '토지';
@@ -752,8 +906,8 @@ function AddDialog({
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
   const save = async () => {
-    if (!form.type) return alert('유형은 필수');
-    if (!form.address) return alert('주소는 필수');
+    if (!form.type) return alert('유형은 필수입니다.');
+    if (!form.address.trim()) return alert('주소는 필수입니다.');
 
     setSaving(true);
 
@@ -778,137 +932,224 @@ function AddDialog({
     const { error } = await supabase.from('listings').insert([payload]);
     setSaving(false);
 
-    if (error) return alert('저장 실패: ' + error.message);
+    if (error) {
+      console.error(error);
+      alert('저장 실패: ' + error.message);
+      return;
+    }
     onSaved();
   };
 
-  const inputClass =
-    "border rounded px-3 py-2 text-sm w-full";
-  const labelClass = "text-sm text-gray-600";
+  // ✅ 모바일에서도 절대 안 잘리게 (중요)
+  const wrap: CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,.35)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 50,
+    padding: 12,
+  };
 
-  const types = CREATE_TYPES;
+  const card: CSSProperties = {
+    width: 720,
+    maxWidth: '100%',
+    background: '#fff',
+    borderRadius: 14,
+    boxShadow: '0 12px 40px rgba(0,0,0,.18)',
+    maxHeight: '88vh',         // ✅ 화면 밖으로 안 나감
+    overflow: 'hidden',        // ✅ 내부 스크롤은 body에서
+    display: 'flex',
+    flexDirection: 'column',
+  };
 
-  const prettyType = (t: string) =>
-    t === '건물매매' ? '건물 매매'
-    : t === '단독매매' ? '단독 매매'
-    : t === '빌라매매' ? '빌라 매매'
-    : t === '토지' ? '토지 매매'
-    : t;
+  const head: CSSProperties = {
+    padding: 14,
+    borderBottom: '1px solid #eef2f7',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  };
+
+  const body: CSSProperties = {
+    padding: 14,
+    overflow: 'auto',          // ✅ 여기서 스크롤
+    WebkitOverflowScrolling: 'touch',
+  };
+
+  const foot: CSSProperties = {
+    padding: 12,
+    borderTop: '1px solid #eef2f7',
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: 8,
+    position: 'sticky',        // ✅ 하단 고정 느낌
+    bottom: 0,
+    background: '#fff',
+  };
+
+  const grid: CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: '140px 1fr',
+    gap: 8,
+    alignItems: 'center',
+  };
+
+  const ip: CSSProperties = {
+    padding: '8px 10px',
+    border: '1px solid #d1d5db',
+    borderRadius: 10,
+    width: '100%',
+    outline: 'none',
+    fontSize: 13,
+  };
+
+  const footBtn: CSSProperties = {
+    padding: '10px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: 10,
+    background: '#fff',
+    cursor: 'pointer',
+    fontSize: 13,
+    whiteSpace: 'nowrap',
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl w-full max-w-2xl p-5 space-y-3" onClick={(e)=>e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">매물 추가</h2>
-          <button onClick={onClose} className="border rounded px-3 py-1 text-sm">닫기</button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <div className={labelClass}>유형</div>
-            <select className={inputClass} value={form.type} onChange={e=>set('type', e.target.value)}>
-              <option value="">선택</option>
-              {types.map(t => <option key={t} value={t}>{prettyType(t)}</option>)}
-            </select>
-          </div>
-
-          <div className="space-y-1 md:col-span-2">
-            <div className={labelClass}>주소</div>
-            <input className={inputClass} value={form.address} onChange={e=>set('address', e.target.value)} />
-          </div>
-
-          <div className="space-y-1">
-            <div className={labelClass}>{isLandSaleType || isVillaSaleType ? '매매가(만원)' : '가격(만원)'}</div>
-            <input className={inputClass} value={form.price_manwon} onChange={e=>set('price_manwon', e.target.value)} />
-          </div>
-
-          {/* 면적 */}
-          {isLandSaleType ? (
-            <>
-              <div className="space-y-1">
-                <div className={labelClass}>대지면적(㎡)</div>
-                <input className={inputClass} value={form.land_area_m2} onChange={e=>set('land_area_m2', e.target.value)} />
-              </div>
-              {!isLandOnly && (
-                <div className="space-y-1">
-                  <div className={labelClass}>연면적(㎡)</div>
-                  <input className={inputClass} value={form.gross_area_m2} onChange={e=>set('gross_area_m2', e.target.value)} />
-                </div>
-              )}
-            </>
-          ) : isVillaSaleType ? (
-            <>
-              <div className="space-y-1">
-                <div className={labelClass}>전용면적(㎡)</div>
-                <input className={inputClass} value={form.gross_area_m2} onChange={e=>set('gross_area_m2', e.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <div className={labelClass}>대지지분(㎡)</div>
-                <input className={inputClass} value={form.land_area_m2} onChange={e=>set('land_area_m2', e.target.value)} />
-              </div>
-            </>
-          ) : (
-            <div className="space-y-1">
-              <div className={labelClass}>전용면적(㎡)</div>
-              <input className={inputClass} value={form.gross_area_m2} onChange={e=>set('gross_area_m2', e.target.value)} />
-            </div>
-          )}
-
-          {!isLandOnly && (
-            <div className="space-y-1">
-              <div className={labelClass}>층수</div>
-              <input className={inputClass} value={form.floor} onChange={e=>set('floor', e.target.value)} />
-            </div>
-          )}
-
-          {!isLandSaleType && (
-            <div className="space-y-1">
-              <div className={labelClass}>관리비</div>
-              <input className={inputClass} value={form.maintenance} onChange={e=>set('maintenance', e.target.value)} />
-            </div>
-          )}
-
-          {!isLandSaleType && (
-            <div className="space-y-1">
-              <div className={labelClass}>{isBizLease ? '권리금(만원)' : '옵션'}</div>
-              <input className={inputClass} value={isBizLease ? form.premium : form.options} onChange={e=>set(isBizLease ? 'premium' : 'options', e.target.value)} />
-            </div>
-          )}
-
-          {!hideBldgUse && (
-            <div className="space-y-1">
-              <div className={labelClass}>건축물 용도</div>
-              <input className={inputClass} value={form.bldg_use} onChange={e=>set('bldg_use', e.target.value)} />
-            </div>
-          )}
-
-          <div className="space-y-1">
-            <div className={labelClass}>연락처</div>
-            <input className={inputClass} value={form.contact} onChange={e=>set('contact', e.target.value)} />
-          </div>
-
-          <div className="space-y-1">
-            <div className={labelClass}>계약일</div>
-            <input type="date" className={inputClass} value={form.contract_date} onChange={e=>set('contract_date', e.target.value)} />
-          </div>
-
-          <div className="space-y-1">
-            <div className={labelClass}>만료일</div>
-            <input type="date" className={inputClass} value={form.expiry_date} onChange={e=>set('expiry_date', e.target.value)} />
-          </div>
-
-          <div className="space-y-1 md:col-span-2">
-            <div className={labelClass}>비고</div>
-            <input className={inputClass} value={form.note} onChange={e=>set('note', e.target.value)} />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button className="border rounded px-4 py-2 text-sm" onClick={onClose}>취소</button>
-          <button className="bg-black text-white rounded px-4 py-2 text-sm disabled:opacity-60" onClick={save} disabled={saving}>
-            {saving ? "저장중..." : "저장"}
+    <div style={wrap}>
+      <div style={card}>
+        <div style={head}>
+          <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>매물 추가</h2>
+          <button onClick={onClose} style={{ ...footBtn, padding: '6px 10px' }}>
+            닫기
           </button>
         </div>
+
+        <div style={body}>
+          <div style={grid} className="add-grid">
+            <label>유형</label>
+            <select value={form.type} onChange={e => set('type', e.target.value)} style={ip}>
+              <option value="">선택</option>
+              {CREATE_TYPES.map(t => (
+                <option key={t} value={t}>
+                  {t === '건물매매'
+                    ? '건물 매매'
+                    : t === '단독매매'
+                    ? '단독 매매'
+                    : t === '빌라매매'
+                    ? '빌라 매매'
+                    : t === '토지'
+                    ? '토지 매매'
+                    : t}
+                </option>
+              ))}
+            </select>
+
+            <label>주소</label>
+            <input value={form.address} onChange={e => set('address', e.target.value)} style={ip} placeholder="예: 서울 광진구 자양동 123-4" />
+
+            <label>{isLandSaleType || isVillaSaleType ? '매매가(만원)' : '가격(만원)'}</label>
+            <input value={form.price_manwon} onChange={e => set('price_manwon', e.target.value)} style={ip} placeholder={isLandSaleType || isVillaSaleType ? '예: 30000' : '예: 5000/120'} />
+
+            {/* 면적 */}
+            {isLandSaleType ? (
+              <>
+                <label>대지면적(㎡)</label>
+                <input value={form.land_area_m2} onChange={e => set('land_area_m2', e.target.value)} style={ip} inputMode="numeric" />
+                {!isLandOnly && (
+                  <>
+                    <label>연면적(㎡)</label>
+                    <input value={form.gross_area_m2} onChange={e => set('gross_area_m2', e.target.value)} style={ip} inputMode="numeric" />
+                  </>
+                )}
+              </>
+            ) : isVillaSaleType ? (
+              <>
+                <label>전용면적(㎡)</label>
+                <input value={form.gross_area_m2} onChange={e => set('gross_area_m2', e.target.value)} style={ip} inputMode="numeric" />
+                <label>대지지분(㎡)</label>
+                <input value={form.land_area_m2} onChange={e => set('land_area_m2', e.target.value)} style={ip} inputMode="numeric" />
+              </>
+            ) : (
+              <>
+                <label>전용면적(㎡)</label>
+                <input value={form.gross_area_m2} onChange={e => set('gross_area_m2', e.target.value)} style={ip} inputMode="numeric" />
+              </>
+            )}
+
+            {/* 층수 */}
+            {!isLandOnly && (
+              <>
+                <label>층수</label>
+                <input value={form.floor} onChange={e => set('floor', e.target.value)} style={ip} placeholder="예: 3층 / 반지하 등" />
+              </>
+            )}
+
+            {/* 관리비 */}
+            {!isLandSaleType && (
+              <>
+                <label>관리비</label>
+                <input value={form.maintenance} onChange={e => set('maintenance', e.target.value)} style={ip} placeholder="예: 5만원 / 없음" />
+              </>
+            )}
+
+            {/* 옵션/권리금 */}
+            {isLandSaleType ? null : isBizLease ? (
+              <>
+                <label>권리금(만원)</label>
+                <input value={form.premium} onChange={e => set('premium', e.target.value)} style={ip} placeholder="예: 3000 / 없음" />
+              </>
+            ) : (
+              <>
+                <label>옵션</label>
+                <input value={form.options} onChange={e => set('options', e.target.value)} style={ip} placeholder="예: 풀옵션, 세탁기, TV" />
+              </>
+            )}
+
+            {/* 건축물 용도 */}
+            {!hideBldgUse && (
+              <>
+                <label>건축물 용도</label>
+                <input value={form.bldg_use} onChange={e => set('bldg_use', e.target.value)} style={ip} placeholder="예: 다세대주택, 근린생활시설" />
+              </>
+            )}
+
+            <label>연락처</label>
+            <input value={form.contact} onChange={e => set('contact', e.target.value)} style={ip} placeholder="010-0000-0000" />
+
+            <label>계약일</label>
+            <input type="date" value={form.contract_date} onChange={e => set('contract_date', e.target.value)} style={ip} />
+
+            <label>만료일</label>
+            <input type="date" value={form.expiry_date} onChange={e => set('expiry_date', e.target.value)} style={ip} />
+
+            <label>비고</label>
+            <input value={form.note} onChange={e => set('note', e.target.value)} style={ip} placeholder="옵션/특이사항 등" />
+          </div>
+        </div>
+
+        <div style={foot}>
+          <button onClick={onClose} style={footBtn}>취소</button>
+          <button onClick={save} disabled={saving} style={{ ...footBtn, borderColor: '#2563eb', background: '#2563eb', color: '#fff', fontWeight: 700 }}>
+            {saving ? '저장 중…' : '저장'}
+          </button>
+        </div>
+
+        {/* ✅ AddDialog 모바일 1열 폼 */}
+        <style jsx>{`
+          @media (max-width: 768px) {
+            .add-grid {
+              grid-template-columns: 1fr !important;
+              gap: 8px !important;
+            }
+            .add-grid label {
+              font-size: 12px;
+              color: #6b7280;
+              margin-top: 6px;
+            }
+          }
+        `}</style>
       </div>
     </div>
   );
