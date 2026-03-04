@@ -115,7 +115,7 @@ export default function Home() {
 
   /** 삭제 */
   const onDelete = async (id: string) => {
-    if (!confirm('정말 삭제할까?')) return;
+    if (!confirm('정말 삭제할까요?')) return;
     const { error } = await supabase.from('listings').delete().eq('id', id);
     if (error) return alert('삭제 실패: ' + error.message);
     setRows(prev => prev.filter(r => r.id !== id));
@@ -207,7 +207,7 @@ export default function Home() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">매물 관리</h1>
-            <div className="text-sm text-gray-500">탭/검색/추가/인라인 수정</div>
+            <div className="text-sm text-gray-500">중앙공인중개사사무소 전용 사이트입니다!</div>
           </div>
 
           <button
