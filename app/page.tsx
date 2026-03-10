@@ -124,7 +124,7 @@ export default function Page() {
   };
 
   const onDelete = async (r: ListingRow) => {
-    if (!confirm('삭제할까?')) return;
+    if (!confirm('삭제할까요?')) return;
     const { error } = await supabase.from('listings').delete().eq('id', r.id);
     if (error) return alert('삭제 실패: ' + error.message);
     setRows(prev => prev.filter(x => x.id !== r.id));
